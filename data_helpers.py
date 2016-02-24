@@ -2,7 +2,24 @@ import numpy as np
 import re
 import itertools
 from collections import Counter
+import xml.etree.ElementTree
+import word2vec
+from nltk.tokenize import sent_tokenize
 
+
+
+
+def load_data_and_labels():
+    
+    root = xml.etree.ElementTree.parse('corpus.xml').getroot()
+    corpus = XmlDictConfig(root)
+    root = xml.etree.ElementTree.parse('annotations.xml').getroot()
+    annotations = XmlDictConfig(root)
+
+    #for each listno, make a list of sentences, label some as summaries, others as not.
+
+
+    return [x_text, y]
 
 def clean_str(string):
     """
@@ -24,64 +41,44 @@ def clean_str(string):
     string = re.sub(r"\s{2,}", " ", string)
     return string.strip().lower()
 
+def embed(sentences):
+    model = word2vec.load('~/word2vec_models/GoogleNews-vectors-negative300.bin')
+    embedded_sentences = []
+    tokenized_sentences = []
 
-def load_data_and_labels():
-    """
-    Loads MR polarity data from files, splits the data into words and generates labels.
-    Returns split sentences and labels.
-    """
-    # Load data from files
-    positive_examples = list(open("./data/rt-polaritydata/rt-polarity.pos").readlines())
-    positive_examples = [s.strip() for s in positive_examples]
-    negative_examples = list(open("./data/rt-polaritydata/rt-polarity.neg").readlines())
-    negative_examples = [s.strip() for s in negative_examples]
-    # Split by words
-    x_text = positive_examples + negative_examples
-    x_text = [clean_str(sent) for sent in x_text]
-    x_text = [s.split(" ") for s in x_text]
-    # Generate labels
-    positive_labels = [[0, 1] for _ in positive_examples]
-    negative_labels = [[1, 0] for _ in negative_examples]
-    y = np.concatenate([positive_labels, negative_labels], 0)
-    return [x_text, y]
+    max_len = 0
+    for sentence in sentences:
+        tokenized_sentence = sent_tokenize(sentence)
+        tokenized_sentences.append(tokenized_sentence)
+        if len(tokenized_sentence) > max_len:
+            max_len = len(tokenized_sentence)
 
 
-def pad_sentences(sentences, padding_word="<PAD/>"):
-    """
-    Pads all sentences to the same length. The length is defined by the longest sentence.
-    Returns padded sentences.
-    """
-    sequence_length = max(len(x) for x in sentences)
-    padded_sentences = []
-    for i in range(len(sentences)):
-        sentence = sentences[i]
-        num_padding = sequence_length - len(sentence)
-        new_sentence = sentence + [padding_word] * num_padding
-        padded_sentences.append(new_sentence)
-    return padded_sentences
+    for sentence in sentences:
+        tokenized_sentence = sent_tokenize(sentence)
+        embedded_words = []
+        
+        for word in tokenized_sentence:
+            try:
+                word = model['word']
+            except:
+                word = np.zeros(300)
+            embedded_words.append(word)
+
+        #padding    
+        for i in range(max_len - len(embedded_words)):
+            embedded_words.append(np.zeros(300))
+
+        embedded_sentences.append(embedded_words)
+
+    embedded_sentences = np.array(embedded_sentences)
+
+    return embedded_sentences
 
 
-def build_vocab(sentences):
-    """
-    Builds a vocabulary mapping from word to index based on the sentences.
-    Returns vocabulary mapping and inverse vocabulary mapping.
-    """
-    # Build vocabulary
-    word_counts = Counter(itertools.chain(*sentences))
-    # Mapping from index to word
-    vocabulary_inv = [x[0] for x in word_counts.most_common()]
-    # Mapping from word to index
-    vocabulary = {x: i for i, x in enumerate(vocabulary_inv)}
-    return [vocabulary, vocabulary_inv]
 
 
-def build_input_data(sentences, labels, vocabulary):
-    """
-    Maps sentencs and labels to vectors based on a vocabulary.
-    """
-    x = np.array([[vocabulary[word] for word in sentence] for sentence in sentences])
-    y = np.array(labels)
-    return [x, y]
+
 
 
 def load_data():
